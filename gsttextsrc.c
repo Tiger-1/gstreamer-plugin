@@ -103,7 +103,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     );
 
 #define gst_textsrc_parent_class parent_class
-G_DEFINE_TYPE (Gsttextsrc, gst_textsrc, GST_TYPE_ELEMENT);
+G_DEFINE_TYPE (Gsttextsrc, gst_textsrc, GST_TYPE_BASE_SRC);
 
 static void gst_textsrc_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -111,16 +111,19 @@ static void gst_textsrc_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
 //static gboolean gst_textsrc_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
-static gboolean gst_textsrc_src_event (GstPad *pad, GstObject * parent, GstEvent * event);
-static gboolean gst_textsrc_src_query (GstPad *pad, GstObject * parent, GstQuery * query);
+//static gboolean gst_textsrc_src_event (GstPad *pad, GstObject * parent, GstEvent * event);
+//static gboolean gst_textsrc_src_query (GstPad *pad, GstObject * parent, GstQuery * query);
 /* GObject vmethod implementations */
 
 
 static gboolean gst_textsrc_start (GstBaseSrc * basesrc);
 static gboolean gst_textsrc_stop (GstBaseSrc * basesrc);
-static gboolean gst_textsrc_size (GstBaseSrc * src, guint64 * size);
+//static gboolean gst_textsrc_size (GstBaseSrc * src, guint64 * size);
 static GstFlowReturn gst_textsrc_fill (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer * buf);
+
+static gboolean gst_textsrc_set_data(Gsttextsrc *src, const gchar *text);
+
 
 
 
@@ -130,10 +133,12 @@ gst_textsrc_class_init (GsttextsrcClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
+  
   GstBaseSrcClass *gstbasesrc_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
+  gstbasesrc_class = (GstBaseSrcClass *) klass;
 
   gobject_class->set_property = gst_textsrc_set_property;
   gobject_class->get_property = gst_textsrc_get_property;
@@ -167,24 +172,28 @@ gst_textsrc_class_init (GsttextsrcClass * klass)
 			  "Position of time stream", 0, 7, 0,
 			  G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY));
 
-  g_object_class_install_property(gobject_class, PROP_TXPOS,
+  g_object_class_install_property(gobject_class, PROP_CPOS,
 		  g_param_spec_int("cpos","Center top bottom corner", 
 			  "Position of clock stream", 0, 7, 0,
 			  G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY));
 
   gst_element_class_set_details_simple(gstelement_class,
-    "textsrc",
-    "FIXME:Generic",
-    "FIXME:Generic Template Element",
-    "hugo <<user@hostname.org>>");
+    "Text Source",
+    "Source/Text",
+    "Encoded text stream for video",
+    "Abhinav <imabhinavjain08@gmail.com>");
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&src_factory));
 
+//   gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+
   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_textsrc_start);
   gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_textsrc_stop);
-  gstbasesrc_class->get_size = GST_DEBUG_FUNCPTR (gst_textsrc_size);
+ // gstbasesrc_class->get_size = GST_DEBUG_FUNCPTR (gst_textsrc_size);
   gstbasesrc_class->fill = GST_DEBUG_FUNCPTR (gst_textsrc_fill);
+
+  g_print("In gst_class_init.\n");
 }
 
 /* initialize the new element
@@ -195,12 +204,12 @@ gst_textsrc_class_init (GsttextsrcClass * klass)
 static void
 gst_textsrc_init (Gsttextsrc * filter)
 {
-   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
+   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "textsrc");
     
-   gst_pad_set_event_function (filter->srcpad,
-		   GST_DEBUG_FUNCPTR(gst_textsrc_src_event));
-   gst_pad_set_query_function (filter->srcpad,
-		   GST_DEBUG_FUNCPTR(gst_textsrc_src_query));
+//gst_pad_set_event_function (filter->srcpad,
+//		   GST_DEBUG_FUNCPTR(gst_textsrc_src_event));
+//   gst_pad_set_query_function (filter->srcpad,
+//		   GST_DEBUG_FUNCPTR(gst_textsrc_src_query));
 
 //  GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
@@ -213,6 +222,9 @@ gst_textsrc_init (Gsttextsrc * filter)
   filter->txpos = 0;
   filter->tpos = 0;
   filter->cpos = 0;
+
+	g_print("In gst_textsrc_init \n");
+  gst_base_src_set_blocksize(GST_BASE_SRC(filter), 4096);
 }
 
 static void
@@ -226,7 +238,8 @@ gst_textsrc_set_property (GObject * object, guint prop_id,
       filter->silent = g_value_get_boolean (value);
       break;
     case PROP_TEXT:
-      filter->text = g_value_get_string (value);
+     // filter->text = g_value_get_string (value);
+      gst_textsrc_set_data(filter, g_value_get_string(value));
       break;
     case PROP_TIME:
       filter->time = g_value_get_boolean (value);
@@ -285,6 +298,7 @@ gst_textsrc_get_property (GObject * object, guint prop_id,
 
 /* GstElement vmethod implementations */
 /* this function handles src querys */
+#if 0
 static gboolean
 gst_textsrc_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
 {
@@ -350,13 +364,44 @@ gst_textsrc_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
  * initialize the plug-in itself
  * register the element factories and other features
  */
+#endif
+
+static gboolean
+gst_textsrc_set_data(Gsttextsrc *src, const gchar *text){
+
+	GstState state;
+
+	GST_OBJECT_LOCK(src);
+	state = GST_STATE (src);
+
+	if(state != GST_STATE_READY && state != GST_STATE_NULL)
+		g_print("WRONG STATE\n");
+	GST_OBJECT_UNLOCK(src);
+
+	g_free(src->text);
+
+	if(text == NULL)
+		src->text = NULL;
+	else{
+		src->text = g_strdup(text);
+		GST_INFO("Text: %s", src->text);
+	}
+
+	g_object_notify(G_OBJECT(src), "text");
+
+	return TRUE;
+
+}
+
 
 
 static gboolean
 gst_textsrc_start (GstBaseSrc * basesrc)
 {
-  Gsttextsrc *src = GST_BASE_SRC (basesrc);
+ // Gsttextsrc *src = GST_BASE_SRC (basesrc);
 //  struct stat stat_results;
+
+	
   return TRUE;
 }
 
@@ -376,10 +421,9 @@ gst_textsrc_fill (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer * buf)
 {
 
-  Gsttextsrc *tsrc = GST_BASE_SRC (src);
-  while(1){
-  printf("Hello");
-  }
+  Gsttextsrc *tsrc = (Gsttextsrc *)src;
+  GstMapInfo info;
+
 	return GST_FLOW_OK;
 }
 

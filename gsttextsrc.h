@@ -46,8 +46,12 @@
 #ifndef __GST_TEXTSRC_H__
 #define __GST_TEXTSRC_H__
 
+#include <sys/types.h>
+
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
+
+
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
@@ -67,9 +71,9 @@ typedef struct _GsttextsrcClass GsttextsrcClass;
 
 struct _Gsttextsrc
 {
-  GstElement element;
+  GstBaseSrc element;
 
-  GstPad *sinkpad, *srcpad;
+  GstPad *srcpad;
 
   gboolean silent;
   gchar	*text;
@@ -82,10 +86,10 @@ struct _Gsttextsrc
 
 struct _GsttextsrcClass 
 {
-  GstElementClass parent_class;
+  GstBaseSrcClass parent_class;
 };
 
-GType gst_textsrc_get_type (void);
+G_GNUC_INTERNAL GType gst_textsrc_get_type (void);
 
 G_END_DECLS
 
